@@ -144,6 +144,10 @@ class MakeConfig:
             default='makeconfig_log.txt',
             help="makeconfig logfile : default makeconfig_log.txt",
             required=False)
+        parser.add_argument(
+            '-sk', '--seqkit', dest='sk', type=str,
+            choices=['T', 'F'], default='T',
+            help='使用 seqkit 进行 FASTQ 到 FASTA 的转换，选择 T(rue) 或 F(alse)', required=False)
         self.args = parser.parse_args()
 
     def setup_logger(self, name=None):
@@ -200,6 +204,11 @@ class MakeConfig:
         if self.args.map == 'T' and ToF is not True:
             self.logger.info(f'no such a genome file : {genome}')
             sys.exit(1)
+        if self.args.sk == 'T':
+            seqkit_path = self.tools.get('seqkit')
+            if not seqkit_path or not os.path.exists(seqkit_path):
+                self.logger.info(f'seqkit 工具未找到: {seqkit_path}')
+                sys.exit(1)
 
     def initialize(self):
         if self.args.map == 'F' or self.args.init is not True:
@@ -272,6 +281,7 @@ class MakeConfig:
             lines.append('max_obs_het = ' + str(self.args.moh))
             lines.append('use_original_popmap = ' + str(self.args.uop))
         lines.append('threads = ' + str(self.args.thre))
+        lines.append('fastq_to_fasta = ' + self.args.sk)
         with open(self.args.oc, 'w') as oc:
             oc.write('# command : ' + ' '.join(sys.argv) + '\n')
             oc.write('\n'.join(lines))

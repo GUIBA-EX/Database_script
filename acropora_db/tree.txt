@@ -1,0 +1,90 @@
+.
+├── adapter_trim
+│   ├── AG_GAs11-67_S67_at_R1.fastq.gz
+│   ├── AG_GAs11-67_S67_at_R2.fastq.gz
+│   ├── AG_GAs11-67_S67_fastp.html
+│   ├── AG_GAs11-67_S67_fastp.json
+│   ├── AM_A-1_S33_at_R1.fastq.gz
+│   ├── AM_A-1_S33_at_R2.fastq.gz
+│   ├── AM_A-1_S33_fastp.html
+│   ├── AM_A-1_S33_fastp.json
+│   ├── AP_TS1_S1_at_R1.fastq.gz
+│   ├── AP_TS1_S1_at_R2.fastq.gz
+│   ├── AP_TS1_S1_fastp.html
+│   ├── AP_TS1_S1_fastp.json
+│   ├── AS_ASTUS31_S161_at_R1.fastq.gz
+│   ├── AS_ASTUS31_S161_at_R2.fastq.gz
+│   ├── AS_ASTUS31_S161_fastp.html
+│   └── AS_ASTUS31_S161_fastp.json
+├── analysis_complete.txt
+├── blastdb
+│   ├── acropora_db.ndb
+│   ├── acropora_db.nhr
+│   ├── acropora_db.nin
+│   ├── acropora_db.nog
+│   ├── acropora_db.nos
+│   ├── acropora_db.not
+│   ├── acropora_db.nsq
+│   ├── acropora_db.ntf
+│   ├── acropora_db.nto
+│   └── merged_consensus.fasta
+├── blastdb.ndb
+├── blastdb.nhr
+├── blastdb.nin
+├── blastdb.nog
+├── blastdb.nos
+├── blastdb.not
+├── blastdb.nsq
+├── blastdb.ntf
+├── blastdb.nto
+├── consensus_fasta
+│   ├── AG_GAs11-67_S67.fa
+│   ├── AM_A-1_S33.fa
+│   ├── AP_TS1_S1.fa
+│   └── AS_ASTUS31_S161.fa
+├── fasta
+│   ├── AG_GAs11-67_S67.fasta.gz
+│   ├── AG_GAs11-67_S67_uniform.fasta.gz
+│   ├── AM_A-1_S33.fasta.gz
+│   ├── AM_A-1_S33_uniform.fasta.gz
+│   ├── AP_TS1_S1.fasta.gz
+│   ├── AP_TS1_S1_uniform.fasta.gz
+│   ├── AS_ASTUS31_S161.fasta.gz
+│   └── AS_ASTUS31_S161_uniform.fasta.gz
+├── log.txt
+├── mkdb_acropora.conf
+├── quality_control
+│   ├── AG_GAs11-67_S67_fastp.html
+│   ├── AG_GAs11-67_S67_fastp.json
+│   ├── AG_GAs11-67_S67_qc_R1.fastq.gz
+│   ├── AG_GAs11-67_S67_qc_R2.fastq.gz
+│   ├── AM_A-1_S33_fastp.html
+│   ├── AM_A-1_S33_fastp.json
+│   ├── AM_A-1_S33_qc_R1.fastq.gz
+│   ├── AM_A-1_S33_qc_R2.fastq.gz
+│   ├── AP_TS1_S1_fastp.html
+│   ├── AP_TS1_S1_fastp.json
+│   ├── AP_TS1_S1_qc_R1.fastq.gz
+│   ├── AP_TS1_S1_qc_R2.fastq.gz
+│   ├── AS_ASTUS31_S161_fastp.html
+│   ├── AS_ASTUS31_S161_fastp.json
+│   ├── AS_ASTUS31_S161_qc_R1.fastq.gz
+│   └── AS_ASTUS31_S161_qc_R2.fastq.gz
+├── sample.csv
+├── tree.txt
+└── ustacks
+    ├── AG_GAs11-67_S67.alleles.tsv.gz
+    ├── AG_GAs11-67_S67.snps.tsv.gz
+    ├── AG_GAs11-67_S67.tags.tsv.gz
+    ├── AM_A-1_S33.alleles.tsv.gz
+    ├── AM_A-1_S33.snps.tsv.gz
+    ├── AM_A-1_S33.tags.tsv.gz
+    ├── AP_TS1_S1.alleles.tsv.gz
+    ├── AP_TS1_S1.snps.tsv.gz
+    ├── AP_TS1_S1.tags.tsv.gz
+    ├── AS_ASTUS31_S161.alleles.tsv.gz
+    ├── AS_ASTUS31_S161.snps.tsv.gz
+    ├── AS_ASTUS31_S161.tags.tsv.gz
+    └── id_sample.csv
+
+6 directories, 81 files

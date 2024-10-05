@@ -1,37 +1,72 @@
 FROM ubuntu:22.04
 
-RUN apt update &&\
-    apt install -y default-jdk &&\
-    apt install -y gcc zip tree &&\
-    apt install -y git wget libncurses5-dev libbz2-dev liblzma-dev curl &&\
-    apt install -y ncbi-blast+ &&\
-    apt install -y python-is-python3 pip &&\
-    apt install -y tabix vim less
+# 添加架构检测
+ARG TARGETARCH
 
-RUN mkdir -p /home/app/ &&\
-    mkdir -p /home/data &&\
-    mkdir -p /home/tools/fastx_toolkit
+RUN apt update && apt install -y \
+    default-jdk \
+    gcc \
+    zip \
+    tree \
+    git \
+    wget \
+    libncurses5-dev \
+    libbz2-dev \
+    liblzma-dev \
+    curl \
+    ncbi-blast+ \
+    python-is-python3 \
+    pip \
+    tabix \
+    vim \
+    less
 
-# Install tools
-WORKDIR /home/tools/fastx_toolkit
-RUN wget http://hannonlab.cshl.edu/fastx_toolkit/fastx_toolkit_0.0.13_binaries_Linux_2.6_amd64.tar.bz2 &&\
-    tar xvf fastx_toolkit_0.0.13_binaries_Linux_2.6_amd64.tar.bz2 &&\
-    rm fastx_toolkit_0.0.13_binaries_Linux_2.6_amd64.tar.bz2
-ENV PATH $PATH:/home/tools/fastx_toolkit/bin
+RUN mkdir -p /home/app/ /home/data /home/tools
 
+# 安装 stacks
 WORKDIR /home/tools/
-RUN wget https://catchenlab.life.illinois.edu/stacks/source/stacks-2.64.tar.gz &&\
-    tar xvf stacks-2.64.tar.gz &&\
-    rm stacks-2.64.tar.gz
-WORKDIR /home/tools/stacks-2.64/
-RUN ./configure &&\
-    make &&\
+RUN wget https://catchenlab.life.illinois.edu/stacks/source/stacks-2.64.tar.gz && \
+    tar xvf stacks-2.64.tar.gz && \
+    rm stacks-2.64.tar.gz && \
+    cd stacks-2.64 && \
+    ./configure && \
+    make && \
     make install
 
-# Copy files
+# 安装 fastp
+WORKDIR /home/tools/
+RUN wget http://opengene.org/fastp/fastp && \
+    chmod a+x ./fastp && \
+    mv ./fastp /usr/local/bin/
+
+# 安装 seqkit
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then \
+        SEQKIT_URL="https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_arm64.tar.gz"; \
+    else \
+        SEQKIT_URL="https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_amd64.tar.gz"; \
+    fi && \
+    wget $SEQKIT_URL -O seqkit.tar.gz && \
+    tar -zxvf seqkit.tar.gz && \
+    mv seqkit /usr/local/bin/ && \
+    rm seqkit.tar.gz
+
+# 设置环境变量
+ENV PATH="/home/tools:/usr/local/bin:${PATH}"
+
+# 验证安装
+RUN which fastp && \
+    which seqkit && \
+    which ustacks
+
+# 复制文件
 WORKDIR /home/app
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 COPY ./*.py ./
 COPY classification_proposal/classification.py ./
 COPY *_tmp.conf ./
+COPY . /home/app
+
+# 设置工作目录
+WORKDIR /home/app

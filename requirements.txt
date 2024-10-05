@@ -1,2 +1,1 @@
 configparser==7.0.0
-cutadapt==4.8
