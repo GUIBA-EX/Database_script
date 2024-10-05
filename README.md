@@ -1,18 +1,19 @@
 # CoralDatabaseBuilder
-Migseq用に撮られたデータを用いてblastデータベースの構築および検索を行うプログラム。
+这是一个使用Migseq采集的数据进行BLAST数据库构建及搜索的程序。
 
-## docker
+## 使用docker安装
 ```
 # build image
 docker image build -t classifier .
 # run container
 docker run -itd -v $PWD:/home/data --name coral_classifier classifier bash
+
 # exec container
 docker exec -it coral_classifier bash
 ```
 
 ## Usage : database_accessor
-fastq => migseq前処理 => ustacks => fasta抽出 => blast検索 or 登録
+fastq => migseq预处理 => ustacks => fasta提取 => blast搜索 or 物种序列登录
 ```
 usage: database_accessor.py [-h] -c CONF
 
@@ -22,90 +23,88 @@ options:
   -h, --help            show this help message and exit
   -c CONF, --conf CONF  config file
 ```
-利用例
+例子
 ```
 python database_accessor.py -c config.conf
+python database_accessor.py -c mkdb_acropora.conf
 ```
 
 ## config file
 
 ```
 [tools]
-cutadapt=cutadapt
-fastq_quality_filter=fastq_quality_filter
-fastx_trimmer=fastx_trimmer
-fastq_to_fasta=fastq_to_fasta
-bgzip=bgzip
-ustacks=ustacks
-
-makeblastdb=makeblastdb
-blastn=blastn
+fastp=fastp                         # 指定 fastp 可执行程序的路径
+seqkit=seqkit                       # 指定 seqkit 可执行程序的路径
+bgzip=bgzip                         # 指定 bgzip 可执行程序的路径
+ustacks=ustacks                     # 指定 ustacks 可执行程序的路径
+makeblastdb=makeblastdb             # 指定 makeblastdb 可执行程序的路径
+blastn=blastn                       # 指定 blastn 可执行程序的路径
 
 [settings]
-# choose mode from makedb and search
-mode=makedb
-input_dir=/home/data/indir-coral/ref/
-output_dir=/home/data/outdir-coral-mkdb-from-docker/
-database=/home/data/testdb/coral_from_docker
+mode=makedb                         # 指定运行模式，创建数据库为 makedb，搜索为 search
+input_dir=/home/data/acropora/      # 输入文件所在目录
+output_dir=/home/data/acropora_db/  # 输出文件保存目录
+database=/home/data/acropora_db/blastdb/  # 指定数据库文件路径
 
-threads=2
+threads=8                           # 指定使用的线程数
 
+quality_control=T                   # 是否执行质量控制 (T: 是, F: 否)
+quality=30                          # 质量控制时使用的质量阈值
+reverse_cut_length=15               # 用于切割 reverse read 的长度
+forward_cut_length=0                # 用于切割 forward read 的长度
 
-quality_control=T
-quality=30
-reverse_cut_length=15
-forward_cut_length=0
+adapter_trim=T                      # 是否执行适配器去除 (T: 是, F: 否)
+error_rate=0.05                     # 适配器的错误允许率
+fra=GTCAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC  # forward read 中需要去除的适配器序列
+rra=CAGAGATCGGAAGAGCGTCGTGTAGGGAAAGAC      # reverse read 中需要去除的适配器序列
+min_len=80                          # 最小序列长度
 
-adapter_trim=T
-error_rate=0.05
-fra=GTCAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
-rra=CAGAGATCGGAAGAGCGTCGTGTAGGGAAAGAC
-min_len = 80
-
-fastq_to_fasta=T
-from_fa = F
-stacks=T
-ustacks_opts = -m 3 -M 2
-extract_consensus_fasta = T
-from_cons_fa = F
+fastq_to_fasta=T                    # 是否将 fastq 转换为 fasta 格式 (T: 是, F: 否)
+from_fa=F                           # 是否从 fasta 格式开始分析 (T: 是, F: 否)
+stacks=T                            # 是否使用 stacks 进行分析 (T: 是, F: 否)
+ustacks_opts=-m 3 -M 2              # ustacks 的运行参数
+extract_consensus_fasta=T           # 是否从 ustacks 结果中提取共识序列生成 fasta 文件 (T: 是, F: 否)
+from_cons_fa=F                      # 是否从 ustacks 结果生成的 fasta 文件开始分析 (T: 是, F: 否)
 ```
 
-- [tools] : プログラム内で利用しているツールのパスを指定
-  - cutadapt=cutadapt : cutadaptの実行可能なコマンドを指定
-  - fastq_quality_filter=fastq_quality_filter : fastq_quality_filterの実行可能なコマンドを指定
-  - fastx_trimmer=fastx_trimmer : fastx_trimmerの実行可能なコマンドを指定
-  - fastq_to_fasta=fastq_to_fasta : fastq_to_fastaの実行可能なコマンドを指定
-  - bgzip=bgzip : bgzipの実行可能なコマンドを指定
-  - ustacks=ustacks : ustacksの実行可能なコマンドを指定
-  - makeblastdb=makeblastdb : makeblastdbの実行可能なコマンドを指定
-  - blastn=blastn : blastnの実行可能なコマンドを指定
+| Category  | Command                | Function                                                                                                                                  |
+|:----------|:-----------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
+| **Tools**     | **[fastp]**                | Specify the path to the `fastp` executable                                                                                               |
+|           | **[seqkit]**               | Specify the path to the `seqkit` executable                                                                                              |
+|           | **[bgzip]**                | Specify the path to the `bgzip` executable                                                                                                |
+|           | **[ustacks]**              | Specify the path to the `ustacks` executable                                                                                              |
+|           | **[makeblastdb]**          | Specify the path to the `makeblastdb` executable                                                                                          |
+|           | **[blastn]**               | Specify the path to the `blastn` executable                                                                                               |
+| **Settings**  | **[mode]**                 | Set the running mode: `makedb` for creating a database, `search` for searching                                                            |
+|           | **[input_dir]**            | Specify the directory containing input files                                                                                              |
+|           | **[output_dir]**           | Specify the directory to save output files                                                                                                |
+|           | **[database]**             | Specify the path to the database file                                                                                                     |
+|           | **[threads]**              | Specify the number of threads to use                                                                                                      |
+|           | **[quality_control]**      | Determine whether to perform quality control (`T`: Yes, `F`: No)                                                                          |
+|           | **[quality]**              | Set the quality threshold for quality control                                                                                             |
+|           | **[reverse_cut_length]**   | Set the length to trim from reverse reads                                                                                                 |
+|           | **[forward_cut_length]**   | Set the length to trim from forward reads                                                                                                 |
+|           | **[adapter_trim]**         | Determine whether to remove adapters (`T`: Yes, `F`: No)                                                                                  |
+|           | **[error_rate]**           | Set the allowed error rate for adapter trimming                                                                                           |
+|           | **[fra]**                  | Specify the adapter sequence to remove from forward reads                                                                                 |
+|           | **[rra]**                  | Specify the adapter sequence to remove from reverse reads                                                                                 |
+|           | **[min_len]**              | Set the minimum sequence length after trimming                                                                                            |
+|           | **[fastq_to_fasta]**       | Determine whether to convert FASTQ files to FASTA format (`T`: Yes, `F`: No)                                                              |
+|           | **[from_fa]**              | Determine whether to start analysis from FASTA files (`T`: Yes, `F`: No)                                                                  |
+|           | **[stacks]**               | Determine whether to use Stacks for analysis (`T`: Yes, `F`: No)                                                                          |
+|           | **[ustacks_opts]**         | Specify parameters for running `ustacks`                                                                                                  |
+|           | **[extract_consensus_fasta]** | Determine whether to extract consensus sequences from `ustacks` results to generate a FASTA file (`T`: Yes, `F`: No)                   |
+|           | **[from_cons_fa]**         | Determine whether to start analysis from the FASTA file generated by `ustacks` results (`T`: Yes, `F`: No)                                |
 
-- [settings] : プログラム実行の設定
-  - mode=makedb : データベース作成の場合makedb、検索の場合はsearchを指定
-  - input_dir=/home/data/indir-coral/ref/ : 入力ファイルがあるディレクトリを指定
-  - output_dir=/home/data/outdir-coral-mkdb-from-docker/ : 出力ファイルを格納するディレクトリを指定（makedbではdb作成時に生成される中間ファイル群を保存する）
-  - database=/home/data/testdb/coral_from_docker : databaseファイルへのパスを指定（makedbの場合にはここで指定したファイルを作成。これに拡張子がついてファイルが生成されるため、最後に/などをつけてはいけない。）
-  - threads=2 : 利用するスレッド数
-  - quality_control=T : quality controlを実行する(T) or しない(F)
-  - quality=30 : quality control時のquality値
-  - reverse_cut_length=15 : fastx_trimmerに渡すreverse readを切り出す値(15の場合14塩基切り取り)
-  - forward_cut_length=0 : fastx_trimmerに渡すforward readを切り出す値(15の場合14塩基切り取り)
-  - adapter_trim=T : cutadaptによるadapter trimを実行する(T) or しない(F)
-  - error_rate=0.05 : adapterのエラー許容率
-  - fra=GTCAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC : forward readから除去するadapter
-  - rra=CAGAGATCGGAAGAGCGTCGTGTAGGGAAAGAC : reverse readから除去するadapter
-  - min_len = 80 : 配列の最小長
-  - fastq_to_fasta=T : fastqからfastaへの変換を行う(T) or 行わない(F)
-  - from_fa = F : Fastaからスタートする(T) or しない(F)
-  - stacks=T : stacksによる解析を行う(T) or 行わない(F)
-  - ustacks_opts = -m 3 -M 2 : ustacksのオプション
-  - extract_consensus_fasta = T : ustacksの結果からconsensusと判定された配列を抜き出したfastaを生成する(T) or しない(F)
-  - from_cons_fa = F : ustacksの結果から生成したfastaからスタートする(T) or しない(F)
 
 
 ### input_dir
 
-入力ファイルはpaired endでforward readは``[sample_name]_L001_R1_001.fastq.gz``、reverse readは``[sample_name]_L001_R2_001.fastq.gz``の命名規則を満たしている必要がある。
+输入文件需要使用pair-end测序文件，命名遵循以下规则
+
+forward read：``[sample_name]_L001_R1_001.fastq.gz``
+
+reverse read：``[sample_name]_L001_R2_001.fastq.gz``
 
 #### files in input_dir (makedb from fastq)
 
@@ -149,12 +148,12 @@ Pelatius-IOU010_L001_R1_001.fastq.gz    Pkonojoi-TAK006_L001_R2_001.fastq.gz
 
 ### output_dir
 
-- adapter_trim : fastx_trimmerでの切り取り、およびcutadaptでadapterで切り取った後のfastqを格納するディレクトリ
-- quality_control : cutadaptでquality controlを行った結果のfastqを格納するディレクトリ
-- fasta : fastqをfastaに変換したものを格納するディレクトリ
-- ustacks : fastaをustacksで処理した結果を格納するディレクトリ
-- consensus_fasta : ustacksが抽出したconsensusと判断されたリードをfastaとして保存するディレクトリ
-- blast_results : blastの結果を格納するディレクトリ（searchの場合のみ。outfmt 6でtsvを出力）
+- adapter_trim : 存放通过fastx_trimmer切除以及通过cutadapt去除adapter后的fastq文件的目录
+- quality_control : 存放通过cutadapt进行质量控制后的fastq文件的目录
+- fasta : 存放将fastq转换为fasta后的文件的目录
+- ustacks : 存放通过ustacks处理fasta文件的结果的目录
+- consensus_fasta : 存放ustacks提取出的判断为共识序列的reads并保存为fasta格式的目录
+- blast_results : 存放blast结果的目录（仅在搜索模式下使用，输出格式为outfmt 6的tsv文件）
 
 #### output_dir (from fastq)
 
@@ -206,8 +205,8 @@ outdir-coral-mkdb-from-docker
 
 ## Usage : classification
 
-database_accessor.pyの結果中のblast_resultsを指定して実行することで、それぞれの種についてblastの結果からどの種に分類されるか計算する。
-本プログラムは分類の１例であるので、ここからさらに別の分類方法も追加していくことが望まれる。
+通过指定 `database_accessor.py` 结果中的 `blast_results`，可以计算每个物种的 BLAST 结果，确定其归属于哪个物种。
+本程序是分类的一个示例，因此建议在此基础上进一步添加其他分类方法。
 
 
 ```
@@ -242,7 +241,7 @@ CJ-G1346.tsv  Pelatius-IOU009-2.tsv  Pkonojoi-IOU003.tsv
 CJ-S2201.tsv  Pelatius-IOU010.tsv    Pkonojoi-IOU004.tsv
 CJ-S2202.tsv  Pelatius-S2201.tsv     Pkonojoi-IOU007.tsv
 ```
-blast_resultsのディレクトリ。[sample_name].tsvという形になっている。
+blast_results的文件夹。输入文件需要为[sample_name].tsv的形式。
 
 ### outdir
 
@@ -260,13 +259,13 @@ CJ-G1346.json
 CJ-G1346_summary.tsv
 CJ-S2201.json
 ```
-結果が[sample_name]_summary.tsvと[sample_name].jsonの形式で出力されている。
+结果以 [sample_name]_summary.tsv 和 [sample_name].json 的形式输出。
 
 ### output files
 
-- count : その種に当たったリード数(各リードについて、blast scoreがtopのものを抽出。他の種にもtopで当たっている場合には当分配で割り算)
-- ratio : その種に当たっている割合
-- query_contig_num : クエリとして投入されたcontig数。入力したfastqなどからustacksで判定されたコンティ具を抽出して算出。
+- count : 匹配到该物种的reads数量（针对每个reads，提取BLAST得分最高的结果。如果该reads也匹配到其他物种的最高得分，则按等比例分配计算）
+- ratio : 匹配到该物种的比例
+- query_contig_num : 作为查询投入的contig数量。从输入的fastq等文件中通过ustacks提取并确定的contig数量。
 
 #### tsv
 ```
