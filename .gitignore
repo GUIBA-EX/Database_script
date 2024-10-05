@@ -166,3 +166,4 @@ outdir*/
 indir/
 indir*/
 testdb/
+*.fastq.gz
