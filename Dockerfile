@@ -51,13 +51,26 @@ RUN ARCH=$(uname -m) && \
     mv seqkit /usr/local/bin/ && \
     rm seqkit.tar.gz
 
+# 安装 MAFFT
+WORKDIR /home/tools/
+RUN wget -c https://mafft.cbrc.jp/alignment/software/mafft-7.525-linux.tgz && \
+    tar -zxvf mafft-7.525-linux.tgz && \
+    mv mafft-linux64 mafft && \
+    cd mafft && \
+    chmod a+x ./mafft.bat && \
+    mv mafft.bat mafft && \
+    ln -s /home/tools/mafft/mafft /usr/local/bin/mafft && \
+    cd .. && \
+    rm mafft-7.525-linux.tgz
+
 # 设置环境变量
 ENV PATH="/home/tools:/usr/local/bin:${PATH}"
 
 # 验证安装
 RUN which fastp && \
     which seqkit && \
-    which ustacks
+    which ustacks && \
+    which mafft
 
 # 复制文件
 WORKDIR /home/app
@@ -70,3 +83,9 @@ COPY . /home/app
 
 # 设置工作目录
 WORKDIR /home/app
+
+RUN apt-get update && apt-get install -y \
+    python3-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    pkg-config

@@ -1,1 +1,2 @@
 configparser==7.0.0
+matplotlib==3.9.2

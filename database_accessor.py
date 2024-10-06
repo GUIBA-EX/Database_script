@@ -9,6 +9,7 @@ from subprocess import PIPE
 import sys
 from ACF import analysis_complete_flag as acf
 import shutil
+import concurrent.futures
 
 
 class DatabaseAccessor:
@@ -71,7 +72,7 @@ class DatabaseAccessor:
         
         try:
             self.tools = dict(conf.items('tools'))
-            print(f"成功读取 'tools' 部分: {self.tools}")
+            print(f"成功读取 'tools' : {self.tools}")
         except configparser.NoSectionError:
             print("错误：无法读取 'tools' 部分")
             raise
@@ -98,37 +99,53 @@ class DatabaseAccessor:
         self.execute_cmd(cmd)
 
     def inputdir_to_ini(self):
-        # indir
-        if self.settings['from_fa'] == 'T' or \
-                self.settings['from_cons_fa'] == 'T':
+        if self.settings['from_fa'] == 'T' or self.settings['from_cons_fa'] == 'T':
             self.logger.info('skip loading fastq')
             return 0
+        
         self.logging_title('load fastq dir')
         indir_star = os.path.join(self.indir, '*')
         fastqs = set(glob.glob(indir_star))
         self.files_to_process = {}
         outlines = ['#samplename,forward,reverse']
+        
         for fq in fastqs:
-            if fq.endswith('_R1_001.fastq.gz'):
+            if fq.endswith('_R1_001.fastq.gz') or fq.endswith('_R1_001.fastq'):
                 basename = os.path.basename(fq)
-                paired = fq[:-16] + '_R2_001.fastq.gz'
+                sample = basename[:-16] if basename.endswith('.gz') else basename[:-13]
+                
+                # 检查配对的文件
+                paired = fq[:-16] + '_R2_001.fastq.gz' if fq.endswith('.gz') else fq[:-13] + '_R2_001.fastq'
+                
                 if not os.path.isfile(paired):
                     msg = f'no such a paired-end file : {paired}'
                     self.logger.info(msg)
                     continue
-                sample = basename[:-21]
+                
+                # 如果文件未压缩，进行压缩
+                if not fq.endswith('.gz'):
+                    self.logger.info(f'Compressing {fq}')
+                    self.execute_cmd(f'gzip {fq}')
+                    fq = fq + '.gz'
+                
+                if not paired.endswith('.gz'):
+                    self.logger.info(f'Compressing {paired}')
+                    self.execute_cmd(f'gzip {paired}')
+                    paired = paired + '.gz'
+                
                 basename = os.path.basename(fq)
                 paired_basename = os.path.basename(paired)
                 outline = f'{sample},{basename},{paired_basename}'
                 outlines.append(outline)
                 self.files_to_process[sample] = [fq, paired]
-            else:
-                continue
+        
         with open(os.path.join(self.outdir, 'sample.csv'), 'w') as ini:
             ini.write('\n'.join(outlines))
-        self.samples = self.files_to_process.keys()
+        
+        self.samples = list(self.files_to_process.keys())
+        self.logger.info(f'Loaded {len(self.samples)} samples')
 
-    def quality_control(self):
+    def quality_control(self, sample):
         if self.settings['quality_control'] != 'T' or \
                 self.settings['from_fa'] == 'T' or \
                 self.settings['from_cons_fa'] == 'T':
@@ -149,36 +166,34 @@ class DatabaseAccessor:
         rcl = int(self.settings.get('reverse_cut_length', '0').strip())
         threads = self.settings.get('threads', '4')  # 从配置文件读取线程数，默认为4
         
-        for sample in self.samples:
-            self.logger.info(f"Processing sample: {sample}")
-            infq1 = self.files_to_process[sample][0]
-            infq2 = self.files_to_process[sample][1]
-            outfq1 = os.path.join(fqfd, f'{sample}_qc_R1.fastq.gz')
-            outfq2 = os.path.join(fqfd, f'{sample}_qc_R2.fastq.gz')
-            
-            cmd = [
-                f'{fastp}',
-                f'-i {infq1} -I {infq2}',
-                f'-o {outfq1} -O {outfq2}',
-                f'-q {qual}',
-                f'-f {fcl} -F {rcl}',
-                '--cut_right',
-                f'--thread {threads}',
-                f'--json {os.path.join(fqfd, f"{sample}_fastp.json")}',
-                f'--html {os.path.join(fqfd, f"{sample}_fastp.html")}'
-            ]
-            
-            stdout, stderr = self.execute_cmd(' '.join(cmd))
-            if stderr:
-                self.logger.warning(f"fastp for {sample} produced warnings: {stderr}")
-            
-            self.files_to_process[sample] = [outfq1, outfq2]
-            self.logger.info(f"Finished processing sample: {sample}")
+        infq1 = self.files_to_process[sample][0]
+        infq2 = self.files_to_process[sample][1]
+        outfq1 = os.path.join(fqfd, f'{sample}_qc_R1.fastq.gz')
+        outfq2 = os.path.join(fqfd, f'{sample}_qc_R2.fastq.gz')
+        
+        cmd = [
+            f'{fastp}',
+            f'-i {infq1} -I {infq2}',
+            f'-o {outfq1} -O {outfq2}',
+            f'-q {qual}',
+            f'-f {fcl} -F {rcl}',
+            '--cut_right',
+            f'--thread {threads}',
+            f'--json {os.path.join(fqfd, f"{sample}_fastp.json")}',
+            f'--html {os.path.join(fqfd, f"{sample}_fastp.html")}'
+        ]
+        
+        stdout, stderr = self.execute_cmd(' '.join(cmd))
+        if stderr:
+            self.logger.warning(f"fastp for {sample} produced warnings: {stderr}")
+        
+        self.files_to_process[sample] = [outfq1, outfq2]
+        self.logger.info(f"Finished processing sample: {sample}")
 
         self.logger.info("Quality control completed for all samples")
         return 0
 
-    def adapter_trim(self):
+    def adapter_trim(self, sample):
         # adapter trim
         if self.settings['adapter_trim'] != 'T' or \
                 self.settings['from_fa'] == 'T' or \
@@ -186,7 +201,7 @@ class DatabaseAccessor:
             self.logger.info('跳过接头修剪')
             return 0
         
-        self.logging_title('接头修剪：fastq')
+        self.logging_title('接头修剪fastq')
         ca = os.path.join(self.outdir, 'adapter_trim')
         os.makedirs(ca, exist_ok=True)
         fra = self.settings['fra'].strip()
@@ -194,35 +209,34 @@ class DatabaseAccessor:
         err = self.settings['error_rate']
         ml = self.settings['min_len']
         
-        for sample in self.samples:
-            infq1 = self.files_to_process[sample][0]
-            infq2 = self.files_to_process[sample][1]
-            outfq1 = os.path.join(ca, f'{sample}_at_R1.fastq.gz')
-            outfq2 = os.path.join(ca, f'{sample}_at_R2.fastq.gz')
-            
-            # 构 fastp 命令
-            cmd = f"fastp -i {infq1} -I {infq2} -o {outfq1} -O {outfq2} " \
-                  f"--adapter_sequence {fra} --adapter_sequence_r2 {rra} " \
-                  f"--cut_right --cut_window_size 4 --cut_mean_quality 20 " \
-                  f"--length_required 36 --length_limit 150 " \
-                  f"--average_qual 19 --thread 8 " \
-                  f"--json {os.path.join(ca, f'{sample}_fastp.json')} " \
-                  f"--html {os.path.join(ca, f'{sample}_fastp.html')}"
-            
-            # 执行命令
-            self.execute_cmd(cmd)
-            
-            # 更新文件路径
-            self.files_to_process[sample] = [outfq1, outfq2]
-            
-            # 检查输出文件
-            if os.path.getsize(outfq1) == 0 or os.path.getsize(outfq2) == 0:
-                self.logger.warning(f"{sample} 的接头修剪后文件为空，将使用原始文件")
-                self.files_to_process[sample] = [infq1, infq2]
+        infq1 = self.files_to_process[sample][0]
+        infq2 = self.files_to_process[sample][1]
+        outfq1 = os.path.join(ca, f'{sample}_at_R1.fastq.gz')
+        outfq2 = os.path.join(ca, f'{sample}_at_R2.fastq.gz')
+        
+        # 构 fastp 命令
+        cmd = f"fastp -i {infq1} -I {infq2} -o {outfq1} -O {outfq2} " \
+              f"--adapter_sequence {fra} --adapter_sequence_r2 {rra} " \
+              f"--cut_right --cut_window_size 4 --cut_mean_quality 20 " \
+              f"--length_required 36 --length_limit 150 " \
+              f"--average_qual 19 --thread 8 " \
+              f"--json {os.path.join(ca, f'{sample}_fastp.json')} " \
+              f"--html {os.path.join(ca, f'{sample}_fastp.html')}"
+        
+        # 执行命令
+        self.execute_cmd(cmd)
+        
+        # 更新文件路径
+        self.files_to_process[sample] = [outfq1, outfq2]
+        
+        # 检查输出文件
+        if os.path.getsize(outfq1) == 0 or os.path.getsize(outfq2) == 0:
+            self.logger.warning(f"{sample} 的接头修剪后文件为空，将使用原始文件")
+            self.files_to_process[sample] = [infq1, infq2]
         
         self.logger.info('所有样本的接头修剪已完成')
 
-    def fastq_to_fasta(self):
+    def fastq_to_fasta(self, sample):
         if self.settings['fastq_to_fasta'] != 'T' or \
                 self.settings['from_fa'] == 'T' or \
                 self.settings['from_cons_fa'] == 'T':
@@ -238,29 +252,32 @@ class DatabaseAccessor:
         fasta_dir = os.path.join(self.outdir, 'fasta')
         os.makedirs(fasta_dir, exist_ok=True)
         
-        for sample in self.samples:
-            infq1 = self.files_to_process[sample][0]
-            infq2 = self.files_to_process[sample][1]
-            outfa = os.path.join(fasta_dir, f'{sample}.fasta.gz')
-            
-            cmd = [
-                f'{seqkit} fq2fa',
-                f'-o {outfa}',
-                f'{infq1} {infq2}'
-            ]
-            
-            stdout, stderr = self.execute_cmd(' '.join(cmd))
-            if stderr:
-                self.logger.warning(f"{sample} 的 seqkit 处理产生警告: {stderr}")
-            
-            self.files_to_process[sample] = [outfa]
+        infq1 = self.files_to_process[sample][0]
+        infq2 = self.files_to_process[sample][1]
+        outfa = os.path.join(fasta_dir, f'{sample}.fasta.gz')
+        
+        cmd = [
+            f'{seqkit} fq2fa',
+            f'-o {outfa}',
+            f'{infq1} {infq2}'
+        ]
+        
+        stdout, stderr = self.execute_cmd(' '.join(cmd))
+        if stderr:
+            self.logger.warning(f"{sample} 的 seqkit 处理产生警告: {stderr}")
+        
+        self.files_to_process[sample] = [outfa]
         
         self.logger.info("所有样本的 FASTQ 到 FASTA 转换已完成")
         return 0
 
-    def uniform_sequence_length(self, input_file, output_file, target_length):
+    def uniform_sequence_length(self, sample):
+        input_file = self.files_to_process[sample][0]  # 使用正确的文件路径
+        output_file = f"{input_file[:-9]}_uniform.fasta.gz"  # 在原文件名基础上添加_uniform
+        target_length = 80
         cmd = f"seqkit seq -m {target_length} -M {target_length} {input_file} | gzip > {output_file}"
         self.execute_cmd(cmd)
+        self.files_to_process[sample] = output_file
 
     def from_fasta(self):
         indir_star = os.path.join(self.indir, '*')
@@ -291,7 +308,9 @@ class DatabaseAccessor:
         id_sample_list = []
         
         for sample in self.samples:
-            infa = self.files_to_process[sample]  # 这应该是一个字符串，而不是列
+            infa = self.files_to_process[sample]  # 这里应该是一个字符串
+            if isinstance(infa, list):
+                infa = infa[0]  # 如果是列表,取第一个元素
             cmd = (
                 f'{ustacks} -f {infa} -o {outdir} --name {sample} '
                 f'-i {identifier} {ustacks_opts} -p {thre}'
@@ -328,26 +347,50 @@ class DatabaseAccessor:
             isc.write('\n'.join(id_sample_list))
 
     def extract_consensus_fasta(self):
-        self.logging_title('extract consensus fasta')
+        self.logging_title('提取并串联共识序列FASTA')
         consensus_dir = os.path.join(self.outdir, 'consensus_fasta')
         os.makedirs(consensus_dir, exist_ok=True)
         
         for sample in self.samples:
             input_file = self.files_to_process[sample]
-            output_file = os.path.join(consensus_dir, f"{sample}.fa")
-            cmd = (f"zcat {input_file} | awk '{{if($3==\"consensus\") {{printf \">{sample}_%d\\n%s\\n\", NR, $4}}}}' > {output_file}")
+            output_file = os.path.join(consensus_dir, f"{sample}_concatenated.fa")
+            cmd = (f"zcat {input_file} | "
+                   f"awk '{{if($3==\"consensus\") {{seq = seq $4}}}} "
+                   f"END {{printf \">{sample}\\n%s\\n\", seq}}' > {output_file}")
             self.logger.info(f"[cmd] {cmd}")
             self.execute_cmd(cmd)
             
             if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                self.logger.info(f"成功生成共识序列文件: {output_file}")
+                self.logger.info(f"成功生成串联共识序列文件: {output_file}")
                 self.files_to_process[sample] = output_file
             else:
-                self.logger.error(f"生成共识序列文件失败: {output_file}")
-            
-            # 检查生成的 FASTA 文件
-            self.logger.info(f"检查生成的 FASTA 文件: {output_file}")
-            self.execute_cmd(f"head -n 10 {output_file}")
+                self.logger.error(f"生成串联共识序列文件失败: {output_file}")
+        
+        # 合并所有物种的串联共识序列
+        concatenated_file = os.path.join(consensus_dir, "all_species_concatenated.fa")
+        cat_cmd = f"cat {consensus_dir}/*_concatenated.fa > {concatenated_file}"
+        self.logger.info(f"合并所有物种的串联共识序列: {cat_cmd}")
+        self.execute_cmd(cat_cmd)
+        
+        if os.path.exists(concatenated_file) and os.path.getsize(concatenated_file) > 0:
+            self.logger.info(f"成功生成所有物种的串联共识序列文件: {concatenated_file}")
+        else:
+            self.logger.error(f"生成所有物种的串联共识序列文件失败: {concatenated_file}")
+        
+        # 使用MAFFT进行多序列比对
+        aligned_file = os.path.join(consensus_dir, "all_species_aligned.fa")
+        mafft_cmd = f"mafft --auto {concatenated_file} > {aligned_file}"
+        self.logger.info(f"使用MAFFT进行多序列比对: {mafft_cmd}")
+        self.execute_cmd(mafft_cmd)
+        
+        if os.path.exists(aligned_file) and os.path.getsize(aligned_file) > 0:
+            self.logger.info(f"成功生成多序列比对文件: {aligned_file}")
+        else:
+            self.logger.error(f"生成多序列比对文件失败: {aligned_file}")
+        
+        # 检查生成的比对文件
+        self.logger.info(f"检查生成的比对文件: {aligned_file}")
+        self.execute_cmd(f"head -n 20 {aligned_file}")
 
     def from_consensus_fasta(self):
         indir_star = os.path.join(self.indir, '*')
@@ -369,19 +412,38 @@ class DatabaseAccessor:
 
     def blastn_search(self):
         self.logging_title('blast search')
-        if self.settings['from_cons_fa'] == 'T':
-            self.from_consensus_fasta()
+        self.logger.info(f"开始 BLAST 搜索，输出目录: {self.outdir}")
+        
         db = self.settings['database']
+        db_dir = os.path.dirname(db)
+        db_name = os.path.basename(db)
+        
+        if not os.path.exists(db_dir):
+            self.logger.error(f"BLAST数据库目录不存在: {db_dir}")
+            return
+        
+        # 检查数据库文件是否存在
+        db_files = [f"{db}.{ext}" for ext in ['nhr', 'nin', 'nsq']]
+        if not all(os.path.exists(file) for file in db_files):
+            self.logger.error(f"BLAST数据库文件不完整: {db}")
+            missing_files = [file for file in db_files if not os.path.exists(file)]
+            self.logger.error(f"缺少以下文件: {', '.join(missing_files)}")
+            return
+        
         blastn = self.tools['blastn']
         outdir = os.path.join(self.outdir, 'blast_results')
+        self.logger.info(f"BLAST 结果将保存在: {outdir}")
+        
         os.makedirs(outdir, exist_ok=True)
+        
         for sample in self.samples:
-            fa = self.files_to_process[sample][0]
+            fa = self.files_to_process[sample]
             outtsv = os.path.join(outdir, f'{sample}.tsv')
-            cmd = (
-                f'{blastn} -db {db} -query {fa} '
-                f'-outfmt 6 > {outtsv}')
+            cmd = f'{blastn} -db {db} -query {fa} -outfmt 6 > {outtsv}'
+            self.logger.info(f"执行 BLAST 命令: {cmd}")
             self.execute_cmd(cmd)
+        
+        self.logger.info("BLAST 搜索完成")
 
     def make_blastdb(self):
         self.logging_title('make blastdb')
@@ -436,14 +498,24 @@ class DatabaseAccessor:
         self.execute_cmd(f"ls -l {blastdir}")
 
     def check_file_format(self, file_path):
-        with gzip.open(file_path, 'rt') as f:
-            first_char = f.read(1)
-            if first_char == '>':
-                return 'fasta'
-            elif first_char == '@':
-                return 'fastq'
-            else:
-                return 'unknown'
+        try:
+            with gzip.open(file_path, 'rt') as f:
+                first_char = f.read(1)
+                if first_char == '>':
+                    return 'fasta'
+                elif first_char == '@':
+                    return 'fastq'
+                else:
+                    return 'unknown'
+        except gzip.BadGzipFile:
+            with open(file_path, 'r') as f:
+                first_char = f.read(1)
+                if first_char == '>':
+                    return 'fasta'
+                elif first_char == '@':
+                    return 'fastq'
+                else:
+                    return 'unknown'
 
     def process_step(self, input_file, output_file, process_func):
         try:
@@ -468,25 +540,45 @@ class DatabaseAccessor:
                 return False
         return True
 
+    def process_samples_parallel(self, method_name):
+        method = getattr(self, method_name)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=int(self.settings.get('threads', '4'))) as executor:
+            futures = {executor.submit(lambda s: method(s), sample): sample for sample in self.samples}
+            for future in concurrent.futures.as_completed(futures):
+                sample = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    self.logger.error(f'{method_name} 处理样本 {sample} 时发生错误: {exc}')
+
     def run(self):
         try:
             self.copy_conf()
             self.inputdir_to_ini()
-            self.quality_control()
-            self.adapter_trim()
-            self.fastq_to_fasta()
+            self.process_samples_parallel('quality_control')
+            self.process_samples_parallel('adapter_trim')
+            self.process_samples_parallel('fastq_to_fasta')
             # 在 FASTA 转换后使用
-            for sample in self.samples:
-                fasta_file = f"/home/data/acropora_db/fasta/{sample}.fasta.gz"
-                uniform_fasta = f"/home/data/acropora_db/fasta/{sample}_uniform.fasta.gz"
-                self.uniform_sequence_length(fasta_file, uniform_fasta, 80)  # 假设目标长度为80
-                self.files_to_process[sample] = uniform_fasta
+            self.process_samples_parallel('uniform_sequence_length')
+            self.logger.info(f"统一序列长度后的 files_to_process: {self.files_to_process}")
             self.stacks()
             self.logger.info("stacks 处理完成")
             self.logger.info(f"当前 files_to_process: {self.files_to_process}")
             self.extract_consensus_fasta()
             mode = self.settings['mode']
             if mode == 'search':
+                # 检查BLAST数据库
+                db = self.settings['database']
+                db_dir = os.path.dirname(db)
+                if not os.path.exists(db_dir):
+                    self.logger.error(f"BLAST数据库目录不存在: {db_dir}")
+                    return
+                db_files = [f"{db}.{ext}" for ext in ['nhr', 'nin', 'nsq']]
+                if not all(os.path.exists(file) for file in db_files):
+                    self.logger.error(f"BLAST数据库文件不完整: {db}")
+                    missing_files = [file for file in db_files if not os.path.exists(file)]
+                    self.logger.error(f"缺少以下文件: {', '.join(missing_files)}")
+                    return
                 self.blastn_search()
             elif mode == 'makedb':
                 self.make_blastdb()

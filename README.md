@@ -27,6 +27,7 @@ options:
 ```
 python database_accessor.py -c config.conf
 python database_accessor.py -c mkdb_acropora.conf
+python database_accessor.py -c eDNA.conf
 ```
 
 ## config file
@@ -227,6 +228,9 @@ options:
 実行例
 ```
 python classification.py -indir /home/data/outdir-coral-from-docker/blast_results/ -o /home/data/outdir-coral-from-docker/classified/
+
+python ./classification_proposal/classification.py -indir /home/data/eDNA/result/blast_results/ -o /home/data/eDNA/classified/
+
 ```
 
 ### indir
